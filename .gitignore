@@ -36,7 +36,7 @@ ENV/
 Thumbs.db
 
 # Output docs (optional - remove if you want to track generated docs)
-docs/api/
+docs
 
 
 *.pycache

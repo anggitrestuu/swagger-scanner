@@ -80,6 +80,41 @@ def get_ref_name(ref: str) -> str:
     return sanitize_name(ref.split("/")[-1])
 
 
+def find_matching_schema(inline_schema: dict, openapi: dict) -> str | None:
+    """Try to find a matching schema from components for an inline schema.
+
+    Args:
+        inline_schema: Inline schema object with properties
+        openapi: Full OpenAPI specification
+
+    Returns:
+        Schema name if found, None otherwise
+    """
+    if not isinstance(inline_schema, dict):
+        return None
+
+    inline_props = set(inline_schema.get("properties", {}).keys())
+    inline_required = set(inline_schema.get("required", []))
+
+    if not inline_props:
+        return None
+
+    schemas = openapi.get("components", {}).get("schemas", {})
+
+    for name, schema_def in schemas.items():
+        schema_props = set(schema_def.get("properties", {}).keys())
+        schema_required = set(schema_def.get("required", []))
+
+        # Match by required fields and properties
+        if inline_required and schema_required:
+            if inline_required == schema_required and inline_props == schema_props:
+                return name
+        elif inline_props == schema_props:
+            return name
+
+    return None
+
+
 def openapi_type_to_ts(
     schema: dict | bool | None, openapi: dict, prefix: str = "I"
 ) -> str:
@@ -130,28 +165,52 @@ def openapi_type_to_ts(
 
     schema_type = schema.get("type", "any")
 
+    # Handle OpenAPI 3.1 nullable types: ["string", "null"]
+    is_nullable = False
+    if isinstance(schema_type, list):
+        if "null" in schema_type:
+            is_nullable = True
+            non_null_types = [t for t in schema_type if t != "null"]
+            schema_type = non_null_types[0] if non_null_types else "any"
+        else:
+            schema_type = schema_type[0] if schema_type else "any"
+
+    def maybe_nullable(t: str) -> str:
+        return f"{t} | null" if is_nullable else t
+
     if "enum" in schema:
         enum_values = schema["enum"]
-        return " | ".join(f'"{v}"' for v in enum_values)
+        result = " | ".join(f'"{v}"' for v in enum_values)
+        return maybe_nullable(result)
 
     if schema_type == "string":
-        return "string"
+        return maybe_nullable("string")
     elif schema_type == "integer" or schema_type == "number":
-        return "number"
+        return maybe_nullable("number")
     elif schema_type == "boolean":
-        return "boolean"
+        return maybe_nullable("boolean")
     elif schema_type == "array":
         items = schema.get("items", {})
+        # Try to find matching schema for inline object items
+        if isinstance(items, dict) and items.get("type") == "object" and items.get("properties"):
+            matched = find_matching_schema(items, openapi)
+            if matched:
+                return maybe_nullable(f"{prefix}{sanitize_name(matched)}[]")
         item_type = openapi_type_to_ts(items, openapi, prefix)
-        return f"{item_type}[]"
+        return maybe_nullable(f"{item_type}[]")
     elif schema_type == "object":
         additional = schema.get("additionalProperties")
         if additional:
             value_type = openapi_type_to_ts(additional, openapi, prefix)
-            return f"Record<string, {value_type}>"
-        return "object"
+            return maybe_nullable(f"Record<string, {value_type}>")
+        # Try to find matching schema for inline object
+        if schema.get("properties"):
+            matched = find_matching_schema(schema, openapi)
+            if matched:
+                return maybe_nullable(f"{prefix}{sanitize_name(matched)}")
+        return maybe_nullable("object")
     else:
-        return "any"
+        return maybe_nullable("any")
 
 
 def get_schema_from_content(content: dict, openapi: dict, prefix: str = "I") -> str | None:
