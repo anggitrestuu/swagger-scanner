@@ -30,7 +30,7 @@ def generate_endpoints_table(endpoints: list[Endpoint], tag: str) -> str:
     for ep in tag_endpoints:
         request = f"`{ep.request_body}`" if ep.request_body else "-"
         response = f"`{ep.response}`" if ep.response else "-"
-        summary = ep.summary.replace("|", "\\|") if ep.summary else "-"
+        summary = ep.summary.replace("|", "\\|").replace("\n", " ") if ep.summary else "-"
 
         lines.append(
             f"| {ep.method} | `{ep.path}` | {summary} | {request} | {response} |"
