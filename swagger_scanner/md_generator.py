@@ -22,6 +22,9 @@ def generate_endpoints_table(endpoints: list[Endpoint], tag: str) -> str:
     if not tag_endpoints:
         return ""
 
+    # Sort by path, then by method for consistent ordering
+    tag_endpoints.sort(key=lambda e: (e.path, e.method))
+
     lines = [
         "| Method | Endpoint | Description | Request Body | Response |",
         "|--------|----------|-------------|--------------|----------|",
@@ -121,7 +124,9 @@ def get_related_schemas(
     related = {}
 
     while to_process:
-        name = to_process.pop()
+        # Process in sorted order for deterministic output
+        name = sorted(to_process)[0]
+        to_process.remove(name)
         if name in processed:
             continue
         processed.add(name)
@@ -175,8 +180,8 @@ def generate_tag_markdown(
             "```typescript",
         ])
 
-        for schema in schemas.values():
-            lines.append(generate_interface(schema, prefix))
+        for schema_name in sorted(schemas.keys()):
+            lines.append(generate_interface(schemas[schema_name], prefix))
             lines.append("")
 
         lines.append("```")

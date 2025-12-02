@@ -101,7 +101,8 @@ def find_matching_schema(inline_schema: dict, openapi: dict) -> str | None:
 
     schemas = openapi.get("components", {}).get("schemas", {})
 
-    for name, schema_def in schemas.items():
+    for name in sorted(schemas.keys()):
+        schema_def = schemas[name]
         schema_props = set(schema_def.get("properties", {}).keys())
         schema_required = set(schema_def.get("required", []))
 
@@ -254,7 +255,8 @@ def parse_endpoints(openapi: dict, prefix: str = "I") -> list[Endpoint]:
     endpoints = []
     paths = openapi.get("paths", {})
 
-    for path, path_item in paths.items():
+    for path in sorted(paths.keys()):
+        path_item = paths[path]
         for method in ["get", "post", "put", "patch", "delete", "options", "head"]:
             if method not in path_item:
                 continue
@@ -351,7 +353,8 @@ def parse_schema(
                 all_props.update(sub_schema.get("properties", {}))
                 required_fields.update(sub_schema.get("required", []))
 
-    for prop_name, prop_schema in all_props.items():
+    for prop_name in sorted(all_props.keys()):
+        prop_schema = all_props[prop_name]
         ts_type = openapi_type_to_ts(prop_schema, openapi, prefix)
 
         nullable = prop_schema.get("nullable", False)
@@ -388,7 +391,8 @@ def parse_schemas(openapi: dict, prefix: str = "I") -> dict[str, Schema]:
     components = openapi.get("components", {})
     schema_defs = components.get("schemas", {})
 
-    for name, schema_def in schema_defs.items():
+    for name in sorted(schema_defs.keys()):
+        schema_def = schema_defs[name]
         sanitized = sanitize_name(name)
         schemas[sanitized] = parse_schema(sanitized, schema_def, openapi, prefix)
 
