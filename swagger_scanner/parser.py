@@ -242,7 +242,133 @@ def get_schema_from_content(content: dict, openapi: dict, prefix: str = "I") -> 
     return None
 
 
-def parse_endpoints(openapi: dict, prefix: str = "I") -> list[Endpoint]:
+def extract_inline_schema(
+    schema: dict,
+    name_base: str,
+    openapi: dict,
+    inline_schemas: dict[str, Schema],
+    prefix: str = "I"
+) -> str | None:
+    """Extract inline schema and add it to inline_schemas dict.
+
+    Args:
+        schema: Schema dictionary (possibly inline)
+        name_base: Base name for generating schema name
+        openapi: Full OpenAPI specification
+        inline_schemas: Dictionary to store extracted inline schemas
+        prefix: Prefix for interface names
+
+    Returns:
+        Schema name if extracted, None otherwise
+    """
+    if not isinstance(schema, dict):
+        return None
+
+    # If it's a ref, we don't need to extract
+    if "$ref" in schema:
+        return None
+
+    # Handle arrays of objects
+    if schema.get("type") == "array":
+        items = schema.get("items", {})
+        if isinstance(items, dict) and items.get("type") == "object" and items.get("properties"):
+            # Check if it matches an existing component schema
+            matched = find_matching_schema(items, openapi)
+            if matched:
+                return None  # Already exists in components
+
+            # Generate a unique name for the array item schema
+            schema_name = f"{name_base}Item"
+            sanitized = sanitize_name(schema_name)
+
+            # Avoid duplicates
+            if sanitized not in inline_schemas:
+                inline_schemas[sanitized] = parse_schema(sanitized, items, openapi, prefix)
+
+            return None  # Return None since we're handling array type separately
+
+    # Handle direct object schemas
+    if schema.get("type") == "object" and schema.get("properties"):
+        # Check if it matches an existing component schema
+        matched = find_matching_schema(schema, openapi)
+        if matched:
+            return None  # Already exists in components
+
+        # Generate a unique name
+        sanitized = sanitize_name(name_base)
+
+        # Avoid duplicates
+        if sanitized not in inline_schemas:
+            inline_schemas[sanitized] = parse_schema(sanitized, schema, openapi, prefix)
+
+        return sanitized
+
+    return None
+
+
+def get_schema_from_content_with_inline(
+    content: dict,
+    name_base: str,
+    openapi: dict,
+    inline_schemas: dict[str, Schema],
+    prefix: str = "I"
+) -> str | None:
+    """Extract schema type from content object and handle inline schemas.
+
+    Args:
+        content: Content object from request body or response
+        name_base: Base name for generating inline schema names
+        openapi: Full OpenAPI specification
+        inline_schemas: Dictionary to store extracted inline schemas
+        prefix: Prefix for interface names
+
+    Returns:
+        TypeScript type string or None
+    """
+    if not content:
+        return None
+
+    schema = None
+    for media_type in ["application/json", "*/*"]:
+        if media_type in content:
+            schema = content[media_type].get("schema", {})
+            if schema:
+                break
+
+    if not schema:
+        first_content = next(iter(content.values()), {})
+        schema = first_content.get("schema", {})
+
+    if not schema:
+        return None
+
+    # Try to extract inline schema and get its name
+    schema_name = extract_inline_schema(schema, name_base, openapi, inline_schemas, prefix)
+
+    # If we extracted an inline schema, use its name
+    if schema_name:
+        # Handle array types - extract_inline_schema creates ItemSchema but we need to return array type
+        if schema.get("type") == "array":
+            return f"{prefix}{schema_name}[]"
+        return f"{prefix}{schema_name}"
+
+    # Otherwise, use the standard type conversion (handles refs, arrays, etc.)
+    ts_type = openapi_type_to_ts(schema, openapi, prefix)
+
+    # For inline arrays where we created an item schema, update the type
+    if schema.get("type") == "array":
+        items = schema.get("items", {})
+        if isinstance(items, dict) and items.get("type") == "object" and items.get("properties"):
+            # Check if we have an inline schema for the items
+            item_schema_name = f"{name_base}Item"
+            sanitized = sanitize_name(item_schema_name)
+            if sanitized in inline_schemas:
+                return f"{prefix}{sanitized}[]"
+
+    return ts_type
+
+
+def parse_endpoints(openapi: dict, prefix: str = "I") -> tuple[list[Endpoint], dict[str, Schema]]:
     """Parse all endpoints from OpenAPI specification.
 
     Args:
@@ -250,9 +376,10 @@ def parse_endpoints(openapi: dict, prefix: str = "I") -> list[Endpoint]:
         prefix: Prefix for interface names
 
     Returns:
-        List of Endpoint objects
+        Tuple of (List of Endpoint objects, Dictionary of inline schemas)
     """
     endpoints = []
+    inline_schemas: dict[str, Schema] = {}
     paths = openapi.get("paths", {})
 
     for path in sorted(paths.keys()):
@@ -269,14 +396,20 @@ def parse_endpoints(openapi: dict, prefix: str = "I") -> list[Endpoint]:
             request_body = None
             if "requestBody" in operation:
                 content = operation["requestBody"].get("content", {})
-                request_body = get_schema_from_content(content, openapi, prefix)
+                name_base = f"{operation_id}Request" if operation_id else f"{method}{path.replace('/', '_')}Request"
+                request_body = get_schema_from_content_with_inline(
+                    content, name_base, openapi, inline_schemas, prefix
+                )
 
             response = None
             responses = operation.get("responses", {})
             for status_code in ["200", "201", "default"]:
                 if status_code in responses:
                     content = responses[status_code].get("content", {})
-                    response = get_schema_from_content(content, openapi, prefix)
+                    name_base = f"{operation_id}Response" if operation_id else f"{method}{path.replace('/', '_')}Response"
+                    response = get_schema_from_content_with_inline(
+                        content, name_base, openapi, inline_schemas, prefix
+                    )
                     if response:
                         break
 
@@ -292,7 +425,7 @@ def parse_endpoints(openapi: dict, prefix: str = "I") -> list[Endpoint]:
                 )
             )
 
-    return endpoints
+    return endpoints, inline_schemas
 
 
 def build_constraints(prop_schema: dict) -> list[str]:
