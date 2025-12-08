@@ -26,17 +26,18 @@ def generate_endpoints_table(endpoints: list[Endpoint], tag: str) -> str:
     tag_endpoints.sort(key=lambda e: (e.path, e.method))
 
     lines = [
-        "| Method | Endpoint | Description | Request Body | Response |",
-        "|--------|----------|-------------|--------------|----------|",
+        "| Method | Endpoint | Description | Parameters | Request Body | Response |",
+        "|--------|----------|-------------|------------|--------------|----------|",
     ]
 
     for ep in tag_endpoints:
+        params = f"`{ep.parameters}`" if ep.parameters else "-"
         request = f"`{ep.request_body}`" if ep.request_body else "-"
         response = f"`{ep.response}`" if ep.response else "-"
         summary = ep.summary.replace("|", "\\|").replace("\n", " ") if ep.summary else "-"
 
         lines.append(
-            f"| {ep.method} | `{ep.path}` | {summary} | {request} | {response} |"
+            f"| {ep.method} | `{ep.path}` | {summary} | {params} | {request} | {response} |"
         )
 
     return "\n".join(lines)
@@ -116,6 +117,7 @@ def get_related_schemas(
     # Initial schema names from endpoints
     to_process = set()
     for ep in tag_endpoints:
+        to_process.update(extract_schema_names(ep.parameters))
         to_process.update(extract_schema_names(ep.request_body))
         to_process.update(extract_schema_names(ep.response))
 

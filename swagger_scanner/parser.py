@@ -34,6 +34,7 @@ class Endpoint:
     tags: list[str]
     request_body: str | None
     response: str | None
+    parameters: str | None = None
 
 
 def resolve_ref(openapi: dict, ref: str) -> dict:
@@ -209,6 +210,17 @@ def openapi_type_to_ts(
             matched = find_matching_schema(schema, openapi)
             if matched:
                 return maybe_nullable(f"{prefix}{sanitize_name(matched)}")
+            # Generate inline object type definition
+            props = schema.get("properties", {})
+            required = set(schema.get("required", []))
+            prop_types = []
+            for prop_name in sorted(props.keys()):
+                prop_schema = props[prop_name]
+                prop_type = openapi_type_to_ts(prop_schema, openapi, prefix)
+                optional = "" if prop_name in required else "?"
+                prop_types.append(f"{prop_name}{optional}: {prop_type}")
+            if prop_types:
+                return maybe_nullable("{ " + "; ".join(prop_types) + "; }")
         return maybe_nullable("object")
     else:
         return maybe_nullable("any")
@@ -368,6 +380,88 @@ def get_schema_from_content_with_inline(
     return ts_type
 
 
+def parse_parameters_to_schema(
+    parameters: list,
+    name_base: str,
+    openapi: dict,
+    inline_schemas: dict[str, Schema],
+    prefix: str = "I"
+) -> str | None:
+    """Parse parameters and create a schema for them.
+
+    Args:
+        parameters: List of parameter objects
+        name_base: Base name for generating schema name
+        openapi: Full OpenAPI specification
+        inline_schemas: Dictionary to store extracted inline schemas
+        prefix: Prefix for interface names
+
+    Returns:
+        TypeScript type string or None if no parameters
+    """
+    if not parameters:
+        return None
+
+    # Collect all parameters (resolve $ref if needed)
+    resolved_params = []
+    for param in parameters:
+        if "$ref" in param:
+            resolved = resolve_ref(openapi, param["$ref"])
+            if resolved:
+                resolved_params.append(resolved)
+        else:
+            resolved_params.append(param)
+
+    if not resolved_params:
+        return None
+
+    # Build properties for the parameters schema
+    properties = {}
+    required_fields = []
+
+    for param in resolved_params:
+        param_name = param.get("name", "")
+        if not param_name:
+            continue
+
+        param_in = param.get("in", "")
+        param_schema = param.get("schema", {})
+        param_required = param.get("required", False)
+        param_description = param.get("description", "")
+
+        if param_required:
+            required_fields.append(param_name)
+
+        # Add location info to description
+        location_suffix = f" (in: {param_in})" if param_in else ""
+        full_description = param_description + location_suffix if param_description else location_suffix.strip("() ")
+
+        properties[param_name] = {
+            **param_schema,
+            "description": full_description
+        }
+
+    if not properties:
+        return None
+
+    # Create schema object
+    params_schema = {
+        "type": "object",
+        "properties": properties,
+        "required": required_fields
+    }
+
+    # Generate schema name
+    schema_name = f"{name_base}Params"
+    sanitized = sanitize_name(schema_name)
+
+    # Add to inline schemas
+    if sanitized not in inline_schemas:
+        inline_schemas[sanitized] = parse_schema(sanitized, params_schema, openapi, prefix)
+
+    return f"{prefix}{sanitized}"
+
+
 def parse_endpoints(openapi: dict, prefix: str = "I") -> tuple[list[Endpoint], dict[str, Schema]]:
     """Parse all endpoints from OpenAPI specification.
 
@@ -413,6 +507,13 @@ def parse_endpoints(openapi: dict, prefix: str = "I") -> tuple[list[Endpoint], d
                     if response:
                         break
 
+            parameters = None
+            if "parameters" in operation:
+                name_base = operation_id if operation_id else f"{method}{path.replace('/', '_')}"
+                parameters = parse_parameters_to_schema(
+                    operation["parameters"], name_base, openapi, inline_schemas, prefix
+                )
+
             endpoints.append(
                 Endpoint(
                     method=method.upper(),
@@ -422,6 +523,7 @@ def parse_endpoints(openapi: dict, prefix: str = "I") -> tuple[list[Endpoint], d
                     tags=tags,
                     request_body=request_body,
                     response=response,
+                    parameters=parameters,
                 )
             )
 
