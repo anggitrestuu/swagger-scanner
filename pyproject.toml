@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "swagger-scanner"
+version = "0.1.0"
+description = "Generate Markdown documentation from OpenAPI v3 JSON"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [
+    {name = "Anggit Restu"}
+]
+dependencies = [
+    "requests>=2.28.0",
+    "click>=8.0.0",
+]
+
+[project.scripts]
+swagger-scanner = "swagger_scanner.main:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["swagger_scanner*"]
