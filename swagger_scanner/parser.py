@@ -21,6 +21,7 @@ class Schema:
 
     name: str
     properties: list[SchemaProperty] = field(default_factory=list)
+    type_str: str | None = None
 
 
 @dataclass
@@ -168,7 +169,7 @@ def openapi_type_to_ts(
     schema_type = schema.get("type", "any")
 
     # Handle OpenAPI 3.1 nullable types: ["string", "null"]
-    is_nullable = False
+    is_nullable = bool(schema.get("nullable", False))
     if isinstance(schema_type, list):
         if "null" in schema_type:
             is_nullable = True
@@ -182,7 +183,7 @@ def openapi_type_to_ts(
 
     if "enum" in schema:
         enum_values = schema["enum"]
-        result = " | ".join(f'"{v}"' for v in enum_values)
+        result = " | ".join(format_ts_literal(v) for v in enum_values)
         return maybe_nullable(result)
 
     if schema_type == "string":
@@ -224,6 +225,18 @@ def openapi_type_to_ts(
         return maybe_nullable("object")
     else:
         return maybe_nullable("any")
+
+
+def format_ts_literal(value: Any) -> str:
+    """Format an OpenAPI enum value as a TypeScript literal."""
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return str(value)
+    escaped = str(value).replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
 
 
 def get_schema_from_content(content: dict, openapi: dict, prefix: str = "I") -> str | None:
@@ -573,6 +586,12 @@ def parse_schema(
     Returns:
         Schema object
     """
+    if is_alias_schema(schema_def):
+        return Schema(
+            name=name,
+            type_str=openapi_type_to_ts(schema_def, openapi, prefix),
+        )
+
     properties = []
     required_fields = set(schema_def.get("required", []))
 
@@ -610,6 +629,16 @@ def parse_schema(
         )
 
     return Schema(name=name, properties=properties)
+
+
+def is_alias_schema(schema_def: dict) -> bool:
+    """Return true for component schemas that should be emitted as TS aliases."""
+    if not isinstance(schema_def, dict):
+        return False
+    if schema_def.get("properties") or schema_def.get("type") == "object":
+        return False
+    alias_keys = ("enum", "type", "$ref", "oneOf", "anyOf", "allOf")
+    return any(key in schema_def for key in alias_keys)
 
 
 def parse_schemas(openapi: dict, prefix: str = "I") -> dict[str, Schema]:

@@ -36,6 +36,9 @@ def generate_interface(schema: Schema, prefix: str = "I") -> str:
     Returns:
         TypeScript interface string
     """
+    if schema.type_str:
+        return f"type {prefix}{schema.name} = {schema.type_str};"
+
     lines = [f"interface {prefix}{schema.name} {{"]
 
     for prop in schema.properties:
