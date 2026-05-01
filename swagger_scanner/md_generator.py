@@ -67,6 +67,116 @@ def tag_to_filename(tag: str) -> str:
     return tag.lower().replace(" ", "-").replace("_", "-")
 
 
+def tag_search_terms(tag: str) -> set[str]:
+    """Build simple searchable words for a tag name."""
+    terms = {
+        part.lower()
+        for part in re.split(r"[^A-Za-z0-9]+", tag)
+        if len(part) >= 4
+    }
+
+    expanded = set(terms)
+    for term in terms:
+        if term.endswith("ies") and len(term) > 4:
+            expanded.add(f"{term[:-3]}y")
+        if term.endswith("s") and len(term) > 4:
+            expanded.add(term[:-1])
+
+    return expanded
+
+
+def collect_tag_context_text(
+    tag: str, endpoints: list[Endpoint], schemas: dict[str, Schema]
+) -> str:
+    """Collect searchable text for finding likely cross-module references."""
+    parts = []
+
+    for ep in endpoints:
+        if tag not in ep.tags:
+            continue
+        parts.extend(
+            [
+                ep.path,
+                ep.summary,
+                ep.operation_id,
+                ep.parameters or "",
+                ep.request_body or "",
+                ep.response or "",
+            ]
+        )
+
+    for schema in schemas.values():
+        parts.append(schema.name)
+        for prop in schema.properties:
+            parts.extend([prop.name, prop.type_str, prop.description])
+
+    return " ".join(part for part in parts if part).lower()
+
+
+def find_related_tags(
+    tag: str,
+    endpoints: list[Endpoint],
+    schemas: dict[str, Schema],
+    all_tags: list[str],
+) -> list[str]:
+    """Find likely related tags mentioned by the current tag's endpoints/schemas."""
+    context = collect_tag_context_text(tag, endpoints, schemas)
+    related = []
+
+    for candidate in sorted(all_tags):
+        if candidate == tag:
+            continue
+
+        terms = tag_search_terms(candidate)
+        if any(re.search(rf"\b{re.escape(term)}\b", context) for term in terms):
+            related.append(candidate)
+
+    return related
+
+
+def generate_ai_context_block(
+    tag: str,
+    endpoints: list[Endpoint],
+    schemas: dict[str, Schema],
+    all_tags: list[str],
+) -> str:
+    """Generate a short context note for AI-assisted coding."""
+    lines = [
+        "## AI Coding Context",
+        "",
+        (
+            f"This file only documents the `{format_tag_name(tag)}` API module. "
+            "For the full API map and other available modules, start from "
+            "[index.md](./index.md)."
+        ),
+        "",
+    ]
+
+    related_tags = find_related_tags(tag, endpoints, schemas, all_tags)
+    if related_tags:
+        links = [
+            f"[{format_tag_name(related)}](./{tag_to_filename(related)}.md)"
+            for related in related_tags
+        ]
+        lines.extend([
+            f"Potential related API files: {', '.join(links)}.",
+            "",
+        ])
+
+    module_links = [
+        f"[{format_tag_name(module)}](./{tag_to_filename(module)}.md)"
+        for module in sorted(all_tags)
+        if module != tag
+    ]
+    if module_links:
+        lines.extend([
+            f"Other API modules: {', '.join(module_links)}.",
+            "",
+        ])
+
+    return "\n".join(lines)
+
+
 def extract_schema_names(type_str: str | None) -> set[str]:
     """Extract schema names from TypeScript type string.
 
@@ -147,6 +257,7 @@ def generate_tag_markdown(
     tag: str,
     endpoints: list[Endpoint],
     schemas: dict[str, Schema],
+    all_tags: list[str],
     prefix: str = "I",
 ) -> str:
     """Generate Markdown for a single tag.
@@ -155,6 +266,7 @@ def generate_tag_markdown(
         tag: Tag name
         endpoints: All endpoints
         schemas: Related schemas for this tag
+        all_tags: All tag names in the OpenAPI spec
         prefix: Prefix for TypeScript interfaces
 
     Returns:
@@ -165,6 +277,7 @@ def generate_tag_markdown(
     lines = [
         f"# {formatted_tag} API",
         "",
+        generate_ai_context_block(tag, endpoints, schemas, all_tags),
         "---",
         "",
         "## API Endpoints",
@@ -218,7 +331,9 @@ def generate_per_tag_markdown(
     for tag in sorted(tags.keys()):
         filename = f"{tag_to_filename(tag)}.md"
         related_schemas = get_related_schemas(endpoints, tag, schemas)
-        content = generate_tag_markdown(tag, endpoints, related_schemas, prefix)
+        content = generate_tag_markdown(
+            tag, endpoints, related_schemas, sorted(tags.keys()), prefix
+        )
         result[filename] = content
 
     return result
@@ -261,6 +376,14 @@ def generate_index_markdown(
         lines.append("")
 
     lines.extend([
+        "## AI Coding Context",
+        "",
+        (
+            "Use this index as the starting point when giving API docs to an AI coding "
+            "assistant. Individual module files only document one API area, so include "
+            "this file when a feature may need endpoints from another module."
+        ),
+        "",
         "---",
         "",
         "## API Documentation",
