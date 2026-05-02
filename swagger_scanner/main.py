@@ -18,13 +18,7 @@ from .parser import parse_endpoints, parse_schemas
     default="./docs",
     help="Output directory path (default: ./docs)",
 )
-@click.option(
-    "-p",
-    "--prefix",
-    default="I",
-    help="Prefix for TypeScript interfaces (default: I)",
-)
-def main(url: str, output: str, prefix: str) -> None:
+def main(url: str, output: str) -> None:
     """Scan OpenAPI v3 JSON and generate Markdown documentation.
 
     URL is the endpoint to fetch OpenAPI JSON from (e.g., http://localhost:8000/openapi.json)
@@ -44,10 +38,10 @@ def main(url: str, output: str, prefix: str) -> None:
     version = info.get("version", "unknown")
     click.echo(f"Parsing: {title} (v{version})")
 
-    endpoints, inline_schemas = parse_endpoints(openapi, prefix)
+    endpoints, inline_schemas = parse_endpoints(openapi)
     click.echo(f"Found {len(endpoints)} endpoints")
 
-    schemas = parse_schemas(openapi, prefix)
+    schemas = parse_schemas(openapi)
     click.echo(f"Found {len(schemas)} schemas")
 
     # Merge inline schemas with component schemas
@@ -57,7 +51,7 @@ def main(url: str, output: str, prefix: str) -> None:
 
     os.makedirs(output, exist_ok=True)
 
-    tag_files = generate_per_tag_markdown(openapi, endpoints, all_schemas, prefix)
+    tag_files = generate_per_tag_markdown(openapi, endpoints, all_schemas)
     for filename, content in tag_files.items():
         filepath = os.path.join(output, filename)
         with open(filepath, "w", encoding="utf-8") as f:

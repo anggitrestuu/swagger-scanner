@@ -177,24 +177,29 @@ def generate_ai_context_block(
     return "\n".join(lines)
 
 
-def extract_schema_names(type_str: str | None) -> set[str]:
-    """Extract schema names from TypeScript type string.
+def extract_schema_names(
+    type_str: str | None, candidate_names: set[str]
+) -> set[str]:
+    """Extract referenced schema names from a TypeScript type string.
 
     Args:
-        type_str: TypeScript type string (e.g., "IUserResponse[]")
+        type_str: TypeScript type string
+        candidate_names: Schema names to search for
 
     Returns:
-        Set of schema names without prefix
+        Set of matching schema names
     """
     if not type_str:
         return set()
 
-    pattern = r"I([A-Za-z0-9_]+)"
-    matches = re.findall(pattern, type_str)
-    return set(matches)
+    matches = set()
+    for name in candidate_names:
+        if re.search(rf"(?<![A-Za-z0-9_]){re.escape(name)}(?![A-Za-z0-9_])", type_str):
+            matches.add(name)
+    return matches
 
 
-def get_nested_schema_names(schema: Schema) -> set[str]:
+def get_nested_schema_names(schema: Schema, candidate_names: set[str]) -> set[str]:
     """Extract all schema names referenced in a schema's properties.
 
     Args:
@@ -205,7 +210,7 @@ def get_nested_schema_names(schema: Schema) -> set[str]:
     """
     names = set()
     for prop in schema.properties:
-        names.update(extract_schema_names(prop.type_str))
+        names.update(extract_schema_names(prop.type_str, candidate_names))
     return names
 
 
@@ -223,13 +228,14 @@ def get_related_schemas(
         Dictionary of related schemas
     """
     tag_endpoints = [e for e in endpoints if tag in e.tags]
+    candidate_names = set(all_schemas.keys())
 
     # Initial schema names from endpoints
     to_process = set()
     for ep in tag_endpoints:
-        to_process.update(extract_schema_names(ep.parameters))
-        to_process.update(extract_schema_names(ep.request_body))
-        to_process.update(extract_schema_names(ep.response))
+        to_process.update(extract_schema_names(ep.parameters, candidate_names))
+        to_process.update(extract_schema_names(ep.request_body, candidate_names))
+        to_process.update(extract_schema_names(ep.response, candidate_names))
 
     # Recursively find all nested schemas
     processed = set()
@@ -247,7 +253,7 @@ def get_related_schemas(
             schema = all_schemas[name]
             related[name] = schema
             # Add nested schema references to process queue
-            nested = get_nested_schema_names(schema)
+            nested = get_nested_schema_names(schema, candidate_names)
             to_process.update(nested - processed)
 
     return related
@@ -258,7 +264,7 @@ def generate_tag_markdown(
     endpoints: list[Endpoint],
     schemas: dict[str, Schema],
     all_tags: list[str],
-    prefix: str = "I",
+    prefix: str = "",
 ) -> str:
     """Generate Markdown for a single tag.
 
@@ -308,7 +314,7 @@ def generate_per_tag_markdown(
     openapi: dict,
     endpoints: list[Endpoint],
     schemas: dict[str, Schema],
-    prefix: str = "I",
+    prefix: str = "",
 ) -> dict[str, str]:
     """Generate Markdown files per tag.
 

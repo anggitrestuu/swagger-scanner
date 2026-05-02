@@ -26,7 +26,7 @@ def generate_property_comment(prop: SchemaProperty) -> str:
     return f"  // {' '.join(parts)}"
 
 
-def generate_interface(schema: Schema, prefix: str = "I") -> str:
+def generate_interface(schema: Schema, prefix: str = "") -> str:
     """Generate TypeScript interface from schema.
 
     Args:
@@ -52,7 +52,7 @@ def generate_interface(schema: Schema, prefix: str = "I") -> str:
 
 
 def generate_all_interfaces(
-    schemas: dict[str, Schema], prefix: str = "I"
+    schemas: dict[str, Schema], prefix: str = ""
 ) -> str:
     """Generate all TypeScript interfaces.
 

@@ -25,7 +25,6 @@ python -m swagger_scanner http://localhost:8000/openapi.json -o docs/api
 | Option | Default | Description |
 |--------|---------|-------------|
 | `-o, --output` | `./docs` | Output directory path |
-| `-p, --prefix` | `I` | Prefix for TypeScript interfaces |
 
 ## Output
 

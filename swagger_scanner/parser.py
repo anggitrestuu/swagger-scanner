@@ -119,7 +119,7 @@ def find_matching_schema(inline_schema: dict, openapi: dict) -> str | None:
 
 
 def openapi_type_to_ts(
-    schema: dict | bool | None, openapi: dict, prefix: str = "I"
+    schema: dict | bool | None, openapi: dict, prefix: str = ""
 ) -> str:
     """Convert OpenAPI type to TypeScript type string.
 
@@ -239,7 +239,7 @@ def format_ts_literal(value: Any) -> str:
     return f'"{escaped}"'
 
 
-def get_schema_from_content(content: dict, openapi: dict, prefix: str = "I") -> str | None:
+def get_schema_from_content(content: dict, openapi: dict, prefix: str = "") -> str | None:
     """Extract schema type from content object.
 
     Args:
@@ -272,7 +272,7 @@ def extract_inline_schema(
     name_base: str,
     openapi: dict,
     inline_schemas: dict[str, Schema],
-    prefix: str = "I"
+    prefix: str = "",
 ) -> str | None:
     """Extract inline schema and add it to inline_schemas dict.
 
@@ -336,7 +336,7 @@ def get_schema_from_content_with_inline(
     name_base: str,
     openapi: dict,
     inline_schemas: dict[str, Schema],
-    prefix: str = "I"
+    prefix: str = "",
 ) -> str | None:
     """Extract schema type from content object and handle inline schemas.
 
@@ -398,7 +398,7 @@ def parse_parameters_to_schema(
     name_base: str,
     openapi: dict,
     inline_schemas: dict[str, Schema],
-    prefix: str = "I"
+    prefix: str = "",
 ) -> str | None:
     """Parse parameters and create a schema for them.
 
@@ -475,7 +475,7 @@ def parse_parameters_to_schema(
     return f"{prefix}{sanitized}"
 
 
-def parse_endpoints(openapi: dict, prefix: str = "I") -> tuple[list[Endpoint], dict[str, Schema]]:
+def parse_endpoints(openapi: dict, prefix: str = "") -> tuple[list[Endpoint], dict[str, Schema]]:
     """Parse all endpoints from OpenAPI specification.
 
     Args:
@@ -573,7 +573,7 @@ def build_constraints(prop_schema: dict) -> list[str]:
 
 
 def parse_schema(
-    name: str, schema_def: dict, openapi: dict, prefix: str = "I"
+    name: str, schema_def: dict, openapi: dict, prefix: str = ""
 ) -> Schema:
     """Parse a single schema definition.
 
@@ -641,7 +641,7 @@ def is_alias_schema(schema_def: dict) -> bool:
     return any(key in schema_def for key in alias_keys)
 
 
-def parse_schemas(openapi: dict, prefix: str = "I") -> dict[str, Schema]:
+def parse_schemas(openapi: dict, prefix: str = "") -> dict[str, Schema]:
     """Parse all schemas from OpenAPI specification.
 
     Args:
