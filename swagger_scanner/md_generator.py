@@ -163,17 +163,6 @@ def generate_ai_context_block(
             "",
         ])
 
-    module_links = [
-        f"[{format_tag_name(module)}](./{tag_to_filename(module)}.md)"
-        for module in sorted(all_tags)
-        if module != tag
-    ]
-    if module_links:
-        lines.extend([
-            f"Other API modules: {', '.join(module_links)}.",
-            "",
-        ])
-
     return "\n".join(lines)
 
 
