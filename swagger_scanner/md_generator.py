@@ -197,7 +197,7 @@ def get_nested_schema_names(schema: Schema, candidate_names: set[str]) -> set[st
     Returns:
         Set of referenced schema names
     """
-    names = set()
+    names = extract_schema_names(schema.type_str, candidate_names)
     for prop in schema.properties:
         names.update(extract_schema_names(prop.type_str, candidate_names))
     return names

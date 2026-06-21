@@ -25,6 +25,22 @@ python -m swagger_scanner http://localhost:8000/openapi.json -o docs/api
 | Option | Default | Description |
 |--------|---------|-------------|
 | `-o, --output` | `./docs` | Output directory path |
+| `--types-output` | - | Optional directory for generated `.ts` type modules. Omit this to generate Markdown only. |
+| `--types-filename-style` | `tag` | Type filename style: `tag` keeps tag names, `singular` writes simple singular filenames like `events` -> `event.ts`. |
+| `--types-any` | `unknown` | Fallback TypeScript type for unknown OpenAPI schemas in generated modules: `unknown` or `any`. |
+| `--types-data-only` | `false` | Omit API response wrappers and shared API metadata/error schemas from generated `.ts` modules. |
+
+### Generate Markdown and TypeScript Types
+
+```bash
+python -m swagger_scanner http://localhost:8000/openapi.json \
+  -o docs/api \
+  --types-output src/lib/api/providers/core/types \
+  --types-filename-style singular \
+  --types-data-only
+```
+
+`--types-output` is opt-in. By default, the scanner only writes Markdown files.
 
 ## Output
 

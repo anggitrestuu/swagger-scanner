@@ -148,8 +148,19 @@ def openapi_type_to_ts(
         return " & ".join(types)
 
     if "oneOf" in schema:
-        types = [openapi_type_to_ts(s, openapi, prefix) for s in schema["oneOf"]]
-        return " | ".join(types)
+        types = []
+        has_null = False
+        for s in schema["oneOf"]:
+            if isinstance(s, dict) and s.get("type") == "null":
+                has_null = True
+            else:
+                types.append(openapi_type_to_ts(s, openapi, prefix))
+        if not types:
+            return "null" if has_null else "any"
+        result = " | ".join(types)
+        if has_null:
+            result = f"{result} | null"
+        return result
 
     if "anyOf" in schema:
         types = []
