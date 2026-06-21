@@ -214,7 +214,7 @@ def openapi_type_to_ts(
         return maybe_nullable(f"{item_type}[]")
     elif schema_type == "object":
         additional = schema.get("additionalProperties")
-        if additional:
+        if additional is not None and additional is not False:
             value_type = openapi_type_to_ts(additional, openapi, prefix)
             return maybe_nullable(f"Record<string, {value_type}>")
         # Try to find matching schema for inline object
@@ -646,6 +646,13 @@ def is_alias_schema(schema_def: dict) -> bool:
     """Return true for component schemas that should be emitted as TS aliases."""
     if not isinstance(schema_def, dict):
         return False
+    if (
+        schema_def.get("type") == "object"
+        and not schema_def.get("properties")
+        and schema_def.get("additionalProperties") is not None
+        and schema_def.get("additionalProperties") is not False
+    ):
+        return True
     if schema_def.get("properties") or schema_def.get("type") == "object":
         return False
     alias_keys = ("enum", "type", "$ref", "oneOf", "anyOf", "allOf")
